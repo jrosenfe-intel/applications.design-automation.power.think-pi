@@ -1,0 +1,365 @@
+***
+*** simplis_parse_power_distribution_netlist.sxscr
+***
+
+*** The old script is named translate_specific_spice_netlist.sxscr
+*** this version, released with version 8.10c also optionally creates a symbol.
+Arguments ifile x y orient
+
+
+***This line read the current schematic**
+Let current_schem_filename = ReadSchemProp( 'Path' )  
+  
+Let path_bits = SplitPath( current_schem_filename )
+Let current_path = path_bits[0] & path_bits[1]
+
+Let dbl_spaces = Chr(32) & Chr(32)
+
+*** HTML code for a non-breaking space is '&nbsp;' and we have to find a
+*** way to hide the semicolon from the Let command.  Hence, we are using
+*** chr(59) because the ASCII code for the semicolon is decimal 59.
+Let dbl_spaces_HTML = '&nbsp' & chr(59) & '&nbsp' & chr(59)
+
+Let entries = MakeString( 8 )
+Let do_dialog = 1
+Let create_symbol = 1
+Let file_error = 0
+Let create_symbol_error = 0
+
+if ExistVec( '$arg1' ) then
+
+	Let create_symbol = $arg1
+	Let /quiet /noerr anumber = Val( create_symbol )
+
+	if GetLastError() != 'Ok' then
+		Let create_symbol_error = 1
+	endif
+endif
+
+if ExistVec( '$arg2' ) then
+	Let entries[0] = $arg2
+	if !CanOpenFile( entries[0] ) then
+		Let file_error = 1
+	endif
+endif
+
+if ExistVec( '$arg3' ) then
+	Let entries[1] = $arg3
+endif
+
+if ExistVec( '$arg2' ) && ExistVec( '$arg3' ) then
+	Let do_dialog = 0
+endif
+
+if file_error || create_symbol_error then
+	Echo ; Echo { 'Error: Invalid arguments to the script' }
+	if file_error then
+		Echo { 'Input file: ' & entries[0] & ' cannot be found on disk' }
+	endif
+
+	if create_symbol_error then
+		Echo { 'The third argument to the script should be a boolean, 0 or 1, indicating symbol creation option. 1 creates a symbol, 0 doesn''t' }
+	endif
+
+	Echo { 'Exiting script' }
+	Exit Script
+
+endif
+
+*** Let entries[4] = '1'
+*** Let entries[5] = '1'
+*** Let entries[6] = '0'
+
+
+if do_dialog then
+	Let descriptions = [ 'Parse PDN Netlist File' ,
++			 'Parse PDN Netlist File' ,
++			 'Description' ,
++			 'Enter the input and output file names in the boxes below,<br/>or use the <b>Select...</b>buttons to bring up a File Selection Dialog.<br /><br />After clicking <b>Ok</b> the input file will be parsed and the<br />output file will be created or overwritten if it already exists.' ,
++			 'Input file' ,
++			 'The input file is plain text with alphanumeric net names.' ,
++			 'Output file' ,
++			 'The output file is has numeric net names and is compatible with SIMPLIS.' ,
++			 'Open parsed output file when complete?' ,
++			 '' ,
++			 '' ,
++			 '1' ,
++			 '' ]
+
+*** TODO: Context ids...
+
+Let memory_names = [ 'ParsePDNNetlistInputFileHistory' ,
++			 'ParsePDNNetlistOutputFileHistory' ,
++			 '' ,
++			 'ParsePDNNetlistOpenFile' ,
++			 '' ,
++			 '' ,
++			 'file' ,
++			 '_out' ,
++			 'ParsePDNNetlistCreateSymbol' ,
++			 'ParsePDNNetlistOutputDebug' ,
++			 'ParsePDNNetlistCreateSIMetrixModel' ,
++			 'ParsePDNNetlistAddRtol' ]
+
+	*Let entries = TwoFileSelectionDialog( entries , descriptions , memory_names )
+    
+
+	*Replacing the  TwoFileSelectionDialog *
+		Let input_file = SplitPath(ifile)
+		Let output_file = input_file
+
+
+		Let l = Length(input_file)
+
+		Let output_file[l-2] = input_file[l-2] & '_out'
+
+		Let entries[0] = Join(input_file,'' )
+		Let entries[1] = Join(output_file,'' )
+		Let entries[2] =''
+		Let entries[3]= '1'
+		Let entries[4]= '1'
+		Let entries[5]= '0'
+		Let entries[6]= '0'
+		Let entries[7]= '0'
+
+     **************************************
+	
+ 	 	
+	if !length( entries ) then
+		exit script
+	endif
+
+endif
+
+Let create_symbol = entries[4] == '1'
+
+Let ifile = ConvertUnixToLocal( entries[0] )
+Let ofile = ConvertUnixToLocal( entries[1] )
+
+Let openthefile = entries[3]
+
+*** handle flags
+Let flags = MakeString(0)
+if entries[5]=='1' then
+	let flags = 'debug'
+endif
+
+if entries[6]=='1' then
+	let flags = JoinStringArray( flags , 'output_simetrix_model' )
+endif
+
+if entries[7]=='1' then
+	let flags = JoinStringArray( flags , 'add_r_tol' )
+endif
+
+if !Length( flags ) then
+	Let flags = ''
+endif
+
+let pinnames = ''
+Let error = 1
+
+if !StringLength( ifile ) then
+	exit script
+endif
+
+Let subcircuit_name = ''
+
+*** Starting in SIMetrix/SIMPLIS version 9.00b, we are using version 2 of
+***   the PDN parser.  Version 1 is the one released before 9.00b.
+Let latestVersion = 2
+Let version = latestVersion
+
+
+Let msg =
++ '<p> The latest version of the PDN parser is version 2, first released in SIMetrix/SIMPLIS 9.00b. </p>
++ <p> Compared to the original version of the PDN parser, version 2 has the following improvements: </p>
++ <ul>
++   <li> <nobr>The speed in handling large input files is much improved,</nobr> <br> </li>
++   <li> Nested subcircuit definition in the input files is supported, and <br> </li>
++   <li> Both a full model and a resistive-effect only (R_only) model of the PDN are created.' &
++        dbl_spaces_HTML & 'You can toggle between these two models via a dialog brought up by the usual double
++        clicking of the symbol representing the PDN in the schemnatic.' & dbl_spaces_HTML & '<b>The symbol
++        created will default to the R_only model.</b> <br> </li>
++ </ul>'
+
+*Let ignoreme = MessageBox([msg, 'PDN Parser Version 2'], ['Ok', 'Info', 'dontshowmessageagain'])
+
+
+*** Has the user set the SIMPLISParsePDNVersion option to use version 1?
+if GetOption( 'SIMPLISParsePDNVersion' ) != 'FALSE' then
+
+	*** User prefers to use a specific version of the PDN parser
+	Let /quiet /noerr anumber = Val( GetOption( 'SIMPLISParsePDNVersion' ) )
+
+	if GetLastError() = 'Ok' then
+
+		*** The SIMPLISParsePDNVersion option has a numerical value
+		if ! isComplex(anumber) then
+			Let anumber = floor( anumber )
+			if anumber >= 1 && anumber < version then
+				Let version = anumber
+			endif
+		endif
+	endif
+endif
+
+Let year  = Val( Mid( Date('iso'), 0, 4 ) )
+Let month = Val( Mid( Date('iso'), 5, 2 ) )
+
+if version < latestVersion then
+
+	if year > 2022 || month > 3 then
+
+		*** Remind the user not to use the older version of the PDN parser
+		*** after March 2022.
+
+		Let msg =
++ 'Version ' & version & ' of the PDN parser is meant for temporary backward
++ compatibility. ' & dbl_spaces_HTML & 'It is recommended that you type <br> <br> ' &
++ dbl_spaces_HTML & dbl_spaces_HTML & 'unset SIMPLISParsePDNVersion <br> <br>
++ in the command shell so you can use the latest and most up-to-date
++ version of the PDN parser.'
+
+		Let ignoreme = MessageBox( [ msg, 'Old version of PDN Parser' ], [ 'Ok', 'Info', 'dontshowmessageagain' ] )
+		Echo
+		Echo *********************
+		Echo unset SIMPLISParsePDNVersion
+		Echo *********************
+		Echo
+	endif
+endif
+
+*** Keep allowing the user to choose version 1 through a GUI dialog before
+*** April, 2022 if the user has not already specified to use version 1
+if version == latestVersion && year == 2022 && month < 4 then
+
+	Let msg =
++ '<p> You should use the latest version (version 2) of the PDN parser going forward
++      or starting a new project.' &dbl_spaces_HTML & 'Version 1 of the PDN parser is
++      made available for a limited time only and it will be discontinued soon.'
++      &dbl_spaces_HTML & 'Future bug fixes will only be applied to the latest version
++      of the PDN parser.
++ </p>
++ <ul>
++   <li> <nobr>Click <b>Yes</b> to use the latest version (version 2) of the PDN parser</nobr></li>
++   <li> Click <b>No</b> to use version 1 of the PDN parser</nobr></li>
++ </ul>'
+
+	Let response = MessageBox([msg, 'Choose Version of PDN Parser to Use'], ['YesNo', 'Question'])
+
+	if response == 'Yes' then
+		Let version = latestVersion
+	else
+		Let version = 1
+	endif
+endif
+
+Echo
+Echo { 'Using PDN parser version ' & version }
+Echo
+
+
+*** Call up simplis_parse_pdn_netlist, or simplis_parse_pdn_netlist_V2, which
+*** returns the pin names and subcircuit name defined in the file.
+if version == 1 then
+	simplis_parse_pdn_netlist @pinnames @subcircuit_name @error ifile ofile flags
+else
+	simplis_parse_pdn_netlist_V2 @pinnames @subcircuit_name @error ifile ofile flags version
+endif
+
+*** Check to make sure the pin names are unique
+Let sorted_pinnames = Sort( pinnames, 'unique' )
+if Length(pinnames) != Length(sorted_pinnames) then
+	Echo
+	Echo { 'ERROR: The resultant pin names are not unique.  The following is a list of pinnames that have duplicates:' }
+	Echo
+
+	*** Now sort the pin names again but allow duplicates to be included in the result.
+	Let sorted_pinnames = Sort( pinnames )
+	Let shown = 0
+	Let last_pinname = sorted_pinnames[0]
+
+	for idx=1 to Length(sorted_pinnames) - 1
+	*{
+		if last_pinname != sorted_pinnames[idx] then
+			Let shown = 0
+			Let last_pinname = sorted_pinnames[idx]
+
+		elseif 0 == shown then
+			Echo { dbl_spaces & last_pinname }
+			Let shown = 1
+		endif
+	*}
+	next idx
+
+	Echo
+	Exit Script
+endif
+
+if error != 0 then
+	Exit Script
+endif
+
+if create_symbol then
+
+	*** create symbol - it's in memory now
+	simplis_create_pdn_symbol_1 pinnames subcircuit_name flags version
+
+	Echo
+endif
+
+*if openthefile then
+*	OpenNetlist { ofile }
+*endif
+
+if !create_symbol then
+	Echo { 'Info: You didn''t select the Create symbol? option on the Parse PDN Netlist dialog.' }
+	Echo { 'The following instructions assume you have a compatible symbol from a previous PDN Netlist' }
+	Echo
+endif
+
+*Echo { 'To use the parsed PDN netlist:' }
+Echo { '------------------------------' }
+Echo
+if openthefile then
+	Let str = [ '2' , '3' ]
+	*Echo { '1) Navigate back to your schematic.' }
+else
+	Let str = [ '1' , '2' ]
+endif
+**Echo { str[0] & ') Press Q to place the PDN netlist symbol on your schematic.' }
+*Echo { str[1] & ') Include the parsed PDN netlist in the output using a the following .include statement:' }
+Echo
+Echo { '.include ' & RelativePath( ofile , current_path )}
+Echo 
+
+
+
+*****Including the parsed PDN netlist in the F11 window 
+*** get f11 lines
+
+Let f11 = GetF11Lines()
+*** new f11
+Let newf11 = ''
+Let include = ''
+Let include = '.include ' & RelativePath( ofile , current_path )
+
+if !Length( f11 ) then
+	Let write= WriteF11Lines(include)
+
+else
+   Let l= length(f11)
+   **** using make string to extend F11 
+   Let newf11 = MakeString(l+1, f11)
+   Let newf11[l] = include
+   
+   Let write=WriteF11Lines( newf11 )
+   
+   
+endif
+Echo {'placed on F11 window'}
+
+inst /loc {x} {y} {orient} {subcircuit_name}
+
+

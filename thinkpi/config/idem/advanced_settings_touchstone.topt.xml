@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<exportTask xmlns="OptionsExportSchema.xsd" version="1.0">
+   <options>
+<!--Touchstone version--><version>1</version>
+      <!--Sampling mode--><samplingMode>pre-stored</samplingMode>
+      <!--Responses representation--><responsesRepresentation>S</responsesRepresentation>
+      <!--Print comments--><printComments>true</printComments>
+      <!--Format--><format>MA</format>
+      <!--Digit precision--><digitPrecision>16</digitPrecision>
+      <!--Reference resistance--><R0>
+         <value>1</value>
+      </R0>
+      <!--Frequency unit--><frequencyUnit>Hz</frequencyUnit>
+   </options>
+</exportTask>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<passivityTask xmlns="OptionsPassivitySchema.xsd" version="1.0">
+   <options>
+<!--General Algorithm Control--><main>
+         <algorithm>SOC+HAM</algorithm>
+         <hamEigAlgorithm>auto</hamEigAlgorithm>
+         <passivityMethod>dataBased</passivityMethod>
+         <maxSOCIterations>50</maxSOCIterations>
+         <maxHAMIterations>10</maxHAMIterations>
+         <enforceDC>true</enforceDC>
+         <preserveFrequencyConstraints>false</preserveFrequencyConstraints>
+         <preserveSparsityPattern>true</preserveSparsityPattern>
+         <mustPlot>true</mustPlot>
+         <mustPause>false</mustPause>
+      </main>
+      <!--Sampling--><sampling>
+         <type>fixed</type>
+         <inBandSamples>200</inBandSamples>
+         <offBandSamples>100</offBandSamples>
+         <minDecades>9</minDecades>
+         <minSamplesPerDecade>4</minSamplesPerDecade>
+         <nSlices>10</nSlices>
+         <samplesPerPole>3</samplesPerPole>
+         <minSpacingFactor>0.1</minSpacingFactor>
+         <maxTrackingError>0.2</maxTrackingError>
+         <safetyPassivityFactor>5</safetyPassivityFactor>
+         <maxRefinementPasses>6</maxRefinementPasses>
+         <maxEigTolerance>0.001</maxEigTolerance>
+         <maxEigRitzValues>4</maxEigRitzValues>
+         <verbosity>low</verbosity>
+      </sampling>
+      <!--Frequency Weighting--><weights>
+         <weightsModelBased>
+            <relative enabled="false">
+               <autoThresholdPassivity enabled="false">
+                  <thresholdPassivity>1e-10</thresholdPassivity>
+                  <thresholdFactorPassivity>10</thresholdFactorPassivity>
+               </autoThresholdPassivity>
+            </relative>
+            <lowPassFilter enabled="true">
+               <normalizedPassband>1</normalizedPassband>
+               <normalizedStopband>1.05</normalizedStopband>
+               <ripplePassband>0.2</ripplePassband>
+               <attenuationStopband>40</attenuationStopband>
+            </lowPassFilter>
+            <responses enabled="false"/>
+         </weightsModelBased>
+      </weights>
+      <!--SOC solver--><SOC>
+         <passivityMargin>0.0001</passivityMargin>
+         <slowDownFactor>1</slowDownFactor>
+         <passivityConstraintsMargin>0</passivityConstraintsMargin>
+         <maxPerturbedEigs>INF</maxPerturbedEigs>
+         <maxPerturbedEigTrajs>INF</maxPerturbedEigTrajs>
+         <targetAccuracy>1e-15</targetAccuracy>
+         <relaxedAccuracy>0.001</relaxedAccuracy>
+         <maxIterations>150</maxIterations>
+      </SOC>
+      <!--Sparse Hamiltonian Eigensolver--><HAM>
+         <eigRelativeError>1e-10</eigRelativeError>
+         <eigAbsoluteError>1e-10</eigAbsoluteError>
+         <boundRelativeTolerance>0.1</boundRelativeTolerance>
+         <boundAbsoluteTolerance>0.001</boundAbsoluteTolerance>
+         <mustPlotHamEigs>false</mustPlotHamEigs>
+         <multiShift>
+            <bandwidthDilationFactor>0.01</bandwidthDilationFactor>
+            <maxTries>5</maxTries>
+            <displacementFactor>0.5</displacementFactor>
+            <maxConditionNumber>1000000</maxConditionNumber>
+            <maxBisectionLevel>20</maxBisectionLevel>
+            <maxNumberShifts>600</maxNumberShifts>
+            <toleranceCommonEigs>1e-10</toleranceCommonEigs>
+            <verbosity>low</verbosity>
+         </multiShift>
+         <singleShift>
+            <nEigs>4</nEigs>
+            <maxKrylovSize>60</maxKrylovSize>
+            <maxRestarts>6</maxRestarts>
+            <maxEigRatio>100</maxEigRatio>
+            <tolerance>2.2205e-14</tolerance>
+            <toleranceSpuriousVectors>2.2204e-12</toleranceSpuriousVectors>
+            <toleranceStabilizedEigs>1.4901e-08</toleranceStabilizedEigs>
+            <toleranceRefinementEigs>2.2205e-14</toleranceRefinementEigs>
+         </singleShift>
+      </HAM>
+      <!--Relaxed Constraints--><relaxedPassivity>
+         <mustUseStartingFrequency>false</mustUseStartingFrequency>
+         <startingFrequency>0</startingFrequency>
+         <mustUseRelaxedThreshold>false</mustUseRelaxedThreshold>
+         <relaxedThreshold>0</relaxedThreshold>
+      </relaxedPassivity>
+   </options>
+</passivityTask>

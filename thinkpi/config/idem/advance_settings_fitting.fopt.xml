@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<fittingTask xmlns="OptionsFittingSchema.xsd" version="1.0">
+   <options>
+<!--Reserved parameters--><bandwidth mode="relative">1.0</bandwidth>
+      <order>
+         <type>auto</type>
+      </order>
+      <!--VF iteration control--><iterations>
+         <initial>3</initial>
+         <postadding>1</postadding>
+         <final>1</final>
+      </iterations>
+      <!--Error and convergence control--><errorControl>
+         <stagnation>
+            <alpha>0.05</alpha>
+            <nBackSteps>3</nBackSteps>
+         </stagnation>
+         <skimming>
+            <relativeTolerance>0.001</relativeTolerance>
+            <finalRelativeTolerance>0.001</finalRelativeTolerance>
+         </skimming>
+         <accuracy>
+            <target>0.001</target>
+            <guaranteed>0.1</guaranteed>
+         </accuracy>
+      </errorControl>
+      <!--Port splitting and response selection--><splitting>
+         <splits>
+            <type>none</type>
+         </splits>
+         <p4poles>
+            <type>all</type>
+            <nLargest>INF</nLargest>
+         </p4poles>
+         <p4res>
+            <type>all</type>
+         </p4res>
+      </splitting>
+      <!--Off-band model control--><outOfBand>
+         <enforceDC>true</enforceDC>
+         <frequencyProportionalTerm>false</frequencyProportionalTerm>
+         <enforceAsymptoticPassivity enabled="true">
+            <passivityMargin>0.001</passivityMargin>
+            <relocatePoles>false</relocatePoles>
+         </enforceAsymptoticPassivity>
+         <rejectPoles enabled="false"/>
+      </outOfBand>
+   </options>
+</fittingTask>

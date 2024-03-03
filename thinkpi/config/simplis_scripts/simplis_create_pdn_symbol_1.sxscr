@@ -1,0 +1,373 @@
+***
+*** simplis_create_pdn_symbol.sxscr
+***
+
+Arguments pinnames symbol_name flags PDN_versionNum
+
+Let debug = GetOption( 'SIMPLISCreatePDNSymbolDebug' ) != 'FALSE'
+
+********************************************************************************
+***                                                                          ***
+***                                do the math                               ***
+***                                                                          ***
+********************************************************************************
+
+*** are pins in sequential pairs?
+Let pairs = Search( flags , 'pairs' ) > -1
+
+*** place pins on opposite sides of the symbol in sequence?
+*** Let opposite = Search( flags , 'opposite' ) > -1
+
+if debug then
+	Echo
+	Echo { 'Creating symbol with internal name: ' & symbol_name }
+	show pinnames
+	show symbol_name
+	show flags
+endif
+
+Let add_r_tol = Search( flags , 'add_r_tol' ) > -1
+
+*** make some calculations
+
+*** the obvious one
+Let n_pins = Length( pinnames )
+
+*** have we a ref pin?
+Let have_ref = Search( pinnames , 'ref' ) > -1
+
+*** how many are left after removing the ref pin
+Let n_sig_pins = Iff( have_ref , n_pins - 1 , n_pins )
+
+*** divide by two and round up
+Let half_pins_r_up = Iff( n_sig_pins%2 == 1 , Floor( n_sig_pins/2 ) + 1 , n_sig_pins/2 )
+
+if pairs then
+	*** top and bottom (2 units) + pin_spacing (1 unit) + gaps between pairs (2 units)
+	Let height = 4               + half_pins_r_up/2      + half_pins_r_up * 2
+else
+	***         top (2 units) + pin_spacing (2 units)
+	Let height = 2             + half_pins_r_up * 2
+endif
+
+*** loop through the string pin names, deduce a symbol width from pin name strings across from each other.
+Let widest_str = 0
+Let idx_at_widest = -1
+
+if pairs then
+	Let offset = half_pins_r_up
+else
+	Let offset = 1
+endif
+
+for i = 0 to half_pins_r_up - 1
+	if i+offset < n_sig_pins then
+		*** we have an opposite pin...
+		Let str_len = StringLength( pinnames[i] ) + StringLength( pinnames[i+offset] )
+		if str_len > widest_str then
+			Let widest_str = str_len
+			Let idx_at_widest = i
+		endif
+	else
+		*** no opposite pin...
+		Let str_len = StringLength( pinnames[i] )
+		if str_len > widest_str then
+			Let widest_str = str_len
+			Let idx_at_widest = i
+		endif
+	endif
+next i
+
+if widest_str > -1 then
+	*** swag
+	Let width = Floor(widest_str / 2) + 2
+	if width%2 == 1 then
+		Let width = width + 1
+	endif
+else
+	*** guess an even number
+	let width = 10
+endif
+
+if PDN_versionNum > 1 then
+	*** Raise width by another unit
+	Let width  = width  + 1
+	if width%2 == 1 then
+		Let width = width + 1
+	endif
+	if width < 6 then
+		Let width = 6
+	endif
+	if height < 6 then
+		Let height = 6
+	endif
+endif
+
+if debug then
+	Show height
+	Show width
+	show widest_str
+	Show idx_at_widest
+	if pairs then
+		if (idx_at_widest + half_pins_r_up) < n_sig_pins then
+			Echo { 'wide string : ' & pinnames[idx_at_widest] & ' ' & pinnames[idx_at_widest+half_pins_r_up] }
+		else
+			Echo { 'wide string : ' & pinnames[idx_at_widest] }
+		endif
+	else
+		if (idx_at_widest + 1) < n_sig_pins then
+			Echo { 'wide string : ' & pinnames[idx_at_widest] & ' ' & pinnames[idx_at_widest+1] }
+		else
+			Echo { 'wide string : ' & pinnames[idx_at_widest] }
+		endif
+	endif
+endif
+
+********************************************************************************
+***                                                                          ***
+***                    Ask the user where the symbol goes                    ***
+***                                                                          ***
+********************************************************************************
+
+Let current_schem_filename = ReadSchemProp( 'Path' )
+Let path_bits = SplitPath( current_schem_filename )
+Let current_path = path_bits[0] & path_bits[1]
+
+*** create library file name:
+Let lib_file = current_path & symbol_name & '.sxslb'
+
+*** Check that file is installed
+Let symLibs = GetSymbolFiles()
+
+if Length(symLibs)=0 then
+	Let notInstalled = 1
+elseif Search(symLibs, lib_file)=-1 then
+	Let notInstalled = 1
+else
+	Let notInstalled = 0
+endif
+
+*** set result for later on
+Let res = 'No'
+
+Let str_sym_file_installation = 'And this symbol library is currently installed.'
+
+**Let msg = '<p>The script has created a symbol for your PDN netlist.</p><p>You can now save the symbol to a library file or to the current schematic. By saving the symbol to a library, you will be able to place the symbol on other schematics. If you choose to save the symbol to the existing schematic, you will only be able to use the symbol on this schematic.</p><ul><li><nobr><b>Yes</b> will save the symbol to a symbol library and install the library,</nobr></li><li><b>No</b> will save the symbol to the schematic,</li><li><b>Cancel</b> will exit from the symbol creation process.</li><ul>'
+
+*Let res = MessageBox([msg, 'Save Symbol to Library?'], ['YesNoCancel', 'Question'])
+Let res = 'No'
+
+if GetOption( 'SIMPLISCreatePDNSymbolCategory' ) != 'FALSE' then
+	Let category = GetOption( 'SIMPLISCreatePDNSymbolCategory' )
+else
+	Let category = "'Vendor;PDN Netlists'"
+endif
+
+if res == 'Yes' then
+
+	*** save the symbol to the library file
+	CreateSym /file { lib_file } /flags 1 { symbol_name } { category }
+
+elseif res == 'No' then
+
+	*** we have to remove the old symbol library - user is using the local version and the library version might differ.
+	*** because we have track set to true, the program will take the library version and over-write the current version.
+	CreateSym /local /flags 1 { symbol_name } { category }
+
+else
+
+	Echo {'User canceled symbol creation'}
+
+endif
+
+if res != 'Cancel' then
+
+	*** start in upper right hand corner, create a box.
+	Let x_left	= 100
+	Let y_top	= -200
+	Let x_right	= { x_left + width * 100 }
+	Let y_bottom	= { y_top + height * 100 }
+
+	*** top
+	AddSeg { x_left } { y_top } { x_right } { y_top }
+
+	*** right
+	AddSeg { x_right } { y_top } { x_right } { y_bottom }
+
+	*** bottom
+	AddSeg { x_right } { y_bottom } { x_left } { y_bottom }
+
+	*** left
+	AddSeg { x_left } { y_bottom } { x_left } { y_top }
+
+	*** add pins
+	if have_ref then
+		Let max_cnt = n_sig_pins - 1
+	else
+		Let max_cnt = n_pins - 1
+	endif
+
+	Let y_counter = 0
+	Let l_flags = 8
+	Let r_flags = 10
+	Let b_flags = 9
+	Let y_label_offset = 25
+
+	for i = 0 to max_cnt
+
+		if pairs then
+			if i < half_pins_r_up then
+				AddSeg { x_left-100 } { y_counter * 100 } { x_left } { y_counter * 100 }
+				AddPin { pinnames[i] } { i+1 } { x_left - 100 } { y_counter * 100 } 130 { y_label_offset } { l_flags }
+			else
+				AddSeg { x_right } { y_counter * 100 } { x_right + 100 } { y_counter * 100 }
+				AddPin { pinnames[i] } { i+1 } { x_right + 100 } { y_counter * 100 } -130 { y_label_offset } { r_flags }
+			endif
+
+			*** figure out what to do with the y_counter
+			if i == half_pins_r_up - 1 then
+				Let y_counter = 0
+			elseif i%2 == 1 then
+				Let y_counter = y_counter + 2
+			else
+				Let y_counter = y_counter + 1
+			endif
+		else
+			if i < half_pins_r_up then
+				AddSeg { x_left-100 } { y_counter * 100 } { x_left } { y_counter * 100 }
+				AddPin { pinnames[i] } { i+1 } { x_left - 100 } { y_counter * 100 } 130 { y_label_offset } { l_flags }
+			else
+				AddSeg { x_right } { y_counter * 100 } { x_right + 100 } { y_counter * 100 }
+				AddPin { pinnames[i] } { i+1 } { x_right + 100 } { y_counter * 100 } -130 { y_label_offset } { r_flags }
+			endif
+
+			*** figure out what to do with the y_counter
+			if i == half_pins_r_up - 1 then
+				Let y_counter = 0
+			else
+				Let y_counter = y_counter + 2
+			endif
+		endif
+	next i
+
+	if have_ref then
+		Let half_width = 100 * (width/2 +1)
+		Let idx = search( pinnames , 'ref' )
+		AddSeg { half_width } { y_bottom } { half_width } { y_bottom + 100 }
+		AddPin { pinnames[idx] } { idx+1 } { half_width } { y_bottom + 100 } 0 -130 { b_flags }
+	endif
+
+	for i = 0 to length( pinnames ) - 1
+		if !i then
+			Let pin_name_string = pinnames[i]
+		else
+			Let pin_name_string = pin_name_string & ' ' & pinnames[i]
+		endif
+	next i
+
+	*** add props
+	if PDN_versionNum < 2 then
+	*{
+		Let st = '<ref> <nodelist> %VALUE%'
+		Let template = st & ' pinnames: ' & pin_name_string
+
+		if add_r_tol then
+			Let template = st & ' params: RSCALE=%RSCALE%' & ' pinnames: ' & pin_name_string
+			Let st = st & ' vars: RSCALE=%RSCALE%'
+			AddProp RSCALE 1.0 32795
+
+			AddProp DESCRIPTIONS {'Edit PDN Netlist,PDN Netlist'} 195
+			AddProp TABS {'Parameters'} 195
+			AddProp GROUPS {'Parameters:GROUP:Parameters:0:0:0:0:0:0:0'} 195
+			AddProp LABELS {'Parameters:Parameters:Resistance Scaling Factor:0:0::REAL:1p|100G:1:This parameter scales all resistances in the PDN.<br/><br/>A value of 1.0 will result in the resistance values being the extracted values.<br/>You can enter any scaling factor here&#44; including parameterized values. '} 195
+
+			AddProp PARAMETERS {'RSCALE=1'} 195
+			AddProp VALUESCRIPT {'edit_parameterised_multi_prop_device_tab_value_dialog 1'} 195
+
+		else
+			AddProp VALUESCRIPT { 'simplis_edit_mod' } 64
+		endif
+
+		AddProp SIMPLIS_TEMPLATE { st } 64
+		AddProp TEMPLATE { template } 64
+		AddProp SIMULATOR DUAL 64
+		AddProp REF { 'U?' } 9
+		AddProp VALUE { symbol_name } 9
+		AddProp MODEL X 192
+	*}
+
+	else
+	*{
+		*** For PDN parser version 2 and above, the generated symbol
+		*** always uses a multi-properties tabbed-value dialog.
+
+		Let st = '<ref> <nodelist> %VALUE%_%MODEL_TYPE%'
+		Let template = st & ' pinnames: ' & pin_name_string
+		Let semicolon = chr(59)
+
+		*** There is only one tab and one group
+		AddProp DESCRIPTIONS {'Edit PDN Netlist,PDN Netlist Model Parameters'} 32963
+		AddProp TABS {'Parameters'} 32963
+		AddProp GROUPS {'Parameters:GROUP:Parameters:0:0:0:0:0:0:0'} 32963
+
+		Let label_string = 'Parameters:Parameters:Model Type:0:0::LIST:R_only|Full:1:This parameter determines whether the full model or the resistive-only model is used.'
+		Let parameter_string = 'MODEL_TYPE=Full'
+		AddProp MODEL_TYPE Full 265 { 0.5*(x_left + x_right) } {y_top + 120}
+		AddProp PDN_PARSER_VERSION {PDN_versionNum} 32963
+
+		Let y_top_offset = y_top - 20
+		if add_r_tol then
+
+			Let template = st & ' params: RSCALE=%RSCALE%' & ' pinnames: ' & pin_name_string
+			Let st = st & ' vars: RSCALE=%RSCALE%'
+
+			AddProp RSCALE 1.0 33033 { 0.5*(x_left + x_right) } {y_top_offset}
+			Let y_top_offset = y_top_offset - 100
+			Let label_string = label_string & ' ,Parameters:Parameters:Resistance Scaling Factor:1:0::REAL:1p|100G:1:This parameter scales all resistances in the PDN.<br/><br/>A value of 1.0 will result in the resistance values being the extracted values.<br/>You can enter any scaling factor here&#44' & semicolon & 'including parameterized values.'
+			Let parameter_string = parameter_string & ' RSCALE=1'
+		endif
+
+		AddProp LABELS { label_string } 32963
+		AddProp PARAMETERS { parameter_string } 32963
+		AddProp VALUESCRIPT {'edit_parameterised_multi_prop_device_tab_value_dialog 1'} 32963
+
+		AddProp SIMPLIS_TEMPLATE { st } 32859
+		AddProp TEMPLATE { template } 32859
+		AddProp SIMULATOR DUAL 32960
+		AddProp VALUE { symbol_name } 265 { 0.5*(x_left + x_right) } {y_top_offset}
+		Let y_top_offset = y_top_offset - 100
+		AddProp REF { 'U?' } 265 { 0.5*(x_left + x_right) } {y_top_offset}
+		AddProp MODEL X 32960
+	*}
+	endif
+
+	EndSym
+
+	RebuildSymbols
+	*defkey Q { 'Inst /ne ' & symbol_name }
+	*echo { 'Created symbol for PDN Netlist' }
+	*echo Use "Q" to place symbol
+
+endif
+
+if res == 'Yes' then
+
+
+	Let AddSymbolFiles(lib_file)
+	Let notInstalled = 0
+	Let str_sym_file_installation = 'And installed the symbol library file.'
+
+elseif res == 'No' then
+
+	*** we have to remove the old symbol library - user is using the local version and the library version might differ.
+	*** because we have track set to true, the program will take the library version and over-write the current version.
+	if !notInstalled then
+		Let RemoveSymbolFiles( lib_file )
+	endif
+
+else
+
+endif
+
+
+

@@ -1,0 +1,8 @@
+# ignore the following files
+*.log
+*.html
+*.spd
+*.csv
+.vscode
+__pycache__
+docs/
